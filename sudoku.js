@@ -6,12 +6,47 @@ document.addEventListener('DOMContentLoaded', setUpPuzzle);
 var puzzleClues = []
 //this array will store the possible numbers for each cell [array of rows][array of columns][array of possible values]
 var possibles = []
-//this array stores the rows, columns and sectors that need to be checked or rechecked [0 = row, 1 = column, 2 = sector][row, column or sector number][true or false]
+//this array stores the rows, columns and sectors that need to be checked or rechecked.  Each index contains a pair of variables [the type (0 = row, 1 = column, 2 = sector)][the number]
 var toCheck = [];
 //a variable which stores whether the current loop needs to be repeated
-var goThroughAgain = false;
+var emptySquares = 81;
 //an array which stores the values that are already in each row, column or sector [0 = row, 1 = column, 2 = sector][row, column or sector number][array of values]
 var alreadyContains = [];
+
+
+//this script is run when the page loads
+function setUpPuzzle() {
+  var node;
+  for (var i = 0; i < 9; i ++) {
+    //creating the arrays within arrays
+    puzzleClues[i] = [];
+    possibles[i] = [];
+    for (var j = 0; j < 9; j ++) {
+      //creating the board
+      node = document.createElement("input");
+      node.type = "text"
+      node.classList.add("col-" + j);
+      node.classList.add("row-" + i);
+      node.classList.add("square");
+      document.getElementsByClassName("puzzle")[0].appendChild(node);
+      //more array setup stuff
+      puzzleClues[i][j] = 0;
+      possibles[i][j] = [];
+    }
+  }
+  document.getElementsByClassName("solvebutton")[0].addEventListener('click',solvePuzzle);
+  //more array setup stuff
+  for (var i = 0; i < 3; i ++) {
+    toCheck[i] = [];
+    alreadyContains[i] = [];
+    for (var j = 0; j < 9; j ++) {
+      toCheck.push([i][j]);
+      alreadyContains[i][j] = [];
+    }
+  }
+  //loads an example sudoku
+  getSudoku(3);
+}
 
 //this function just loads an example sudoku (used for testing)
 function getSudoku(level) {
@@ -83,93 +118,17 @@ function getSudoku(level) {
   }
 }
 
-//this script is run when the page loads
-function setUpPuzzle() {
-  var node;
-  for (var i = 0; i < 9; i ++) {
-    //creating the arrays within arrays
-    puzzleClues[i] = [];
-    possibles[i] = [];
-    for (var j = 0; j < 9; j ++) {
-      //creating the board
-      node = document.createElement("input");
-      node.type = "text"
-      node.classList.add("col-" + j);
-      node.classList.add("row-" + i);
-      node.classList.add("square");
-      document.getElementsByClassName("puzzle")[0].appendChild(node);
-      //more array setup stuff
-      puzzleClues[i][j] = 0;
-      possibles[i][j] = [];
-    }
-  }
-  document.getElementsByClassName("solvebutton")[0].addEventListener('click',solvePuzzle);
-  //more array setup stuff
-  for (var i = 0; i < 3; i ++) {
-    toCheck[i] = [];
-    alreadyContains[i] = [];
-    for (var j = 0; j < 9; j ++) {
-      toCheck[i][j] = true;
-      alreadyContains[i][j] = [];
-    }
-  }
-  //loads an example sudoku
-  getSudoku(3);
-}
-
 function solvePuzzle() {
   //this function adds all the inputs into an array and returns true if there are no issues
   if (getPuzzle()) {
     //this function adds all the possible values into an array
     getPossibles();
-
+    //this is the main function to solve the sudoku
     searchForSolutions();
 
   }
   alert('done');
 }
-
-function searchForSolutions() {
-
-  do {
-    do {
-      do {
-        console.log("searching cells");
-        //checks each individual cell and repeats if at least one was found
-      } while (searchCells());
-      console.log("searching rows, columns etc");
-      //checks each row, column and sector (that needs to be checked) and restarts if at least one is found
-    } while (checkPossibles2());
-    console.log("resorting to last resort");
-    //checks last resort function to narrow down possibilities.  This function stops and returns true as soon as anything is found
-  } while (lastResort())
-}
-
-function searchCells() {
-  var result = false;
-  for (var i = 0; i < 9; i++) {
-    for (var j = 0; j < 9; j++) {
-      checkCell(i,j);
-      result = true;
-    }
-  }
-  return result;
-}
-
-function checkPossibles2() {
-  var result = false;
-  if (checkRows()) {
-    result = true;
-  }
-  if (checkCols()) {
-    result = true;
-  }
-  if (checkSectors()) {
-    result = true;
-  }
-  return result;
-}
-
 
 function getPuzzle() {
 
@@ -195,6 +154,7 @@ function getPuzzle() {
         puzzleClues[i][j] = Number(node.value);
         if (node.value > 0) {
           updateContainsArray(i,j,node.value);
+          emptySquares --;
         }
       }
     }
@@ -203,13 +163,92 @@ function getPuzzle() {
   return noIssues;
 }
 
-function updateContainsArray(rowNo,colNo,squareValue) {
-  alreadyContains[0][rowNo].push(squareValue);
-  alreadyContains[1][colNo].push(squareValue);
-  alreadyContains[2][(rowNo - rowNo % 3) + (colNo - colNo % 3) / 3].push(squareValue);
+//this function fills the possibles array
+function getPossibles() {
+  //Adds all possibles into each array if there is not already a clue
+  for (var i = 0; i < 9; i++) {
+    for (var j = 0; j < 9; j ++) {
+      if (puzzleClues[i][j] === 0) {
+        for (var k = 0; k < 9; k ++) {
+          possibles[i][j][k] = k + 1;
+        }
+      }
+    }
+  }
+
+  //Removes possibles based on each clue
+  for (var i = 0; i < 9; i++) {
+    for (var j = 0; j < 9; j++) {
+      if (puzzleClues[i][j] > 0) {
+        removePossible(i,j,puzzleClues[i][j]);
+      }
+    }
+  }
 }
 
+//the main function used to solve the puzzle
+function searchForSolutions() {
 
+  do {
+    do {
+      do {
+        //stops the function when the solution is found
+        if (emptySquares === 0) {
+          return;
+        }
+        console.log("searching cells");
+        //checks each individual cell and repeats if at least one was found
+      } while (searchCells());
+      console.log("searching rows, columns etc");
+      //checks each row, column and sector (that needs to be checked) and restarts if at least one is found
+    } while (searchRowsEtc());
+    console.log("resorting to last resort");
+    //checks last resort function to narrow down possibilities.  This function stops and returns true as soon as anything is found
+  } while (lastResort())
+}
+
+//this function searches each cell to check if there is only one possible solution
+function searchCells() {
+  var result = false;
+  for (var i = 0; i < 9; i++) {
+    for (var j = 0; j < 9; j ++) {
+      if (checkCell(i,j)) {
+        result = true;
+      }
+    }
+  }
+  return result;
+}
+
+//this function searches each row, column and sector to check if any of them have only one square where a certain number is possible.
+function searchRowsEtc() {
+  var checking;
+  var result = false;
+  for (var i = 0; i < toCheck.length; i++) {
+    checking = toCheck.shift();
+    switch (toCheck[0]) {
+      case 0:
+        if (checkRows()) {
+          result = true;
+        }
+        break;
+      case 1:
+        if (checkCols()) {
+          result = true;
+        }
+        break;
+      case 2:
+        if (checkSectors()) {
+          result = true;
+        }
+        break;
+    }
+  }
+  //returns true if any soluntions were found
+  return result;
+}
+
+/*
 function getRow(rowNo, colNo) {
   var rowContents = [];
   for (var i = 0; i < 9; i++) {
@@ -235,37 +274,34 @@ function getSector(rowNo, colNo) {
       sectorContents[SectorContents.length] = puzzleClues[rowCorner+j][colCorner+i];
     }
   }
+}*/
+
+//this function updates everything whenever a soluntion is found
+function setValue(rowNo, colNo, squareValue) {
+  document.getElementsByClassName("row-" + rowNo + " col-" + colNo)[0].value = squareValue;
+  updateContainsArray(rowNo,colNo,squareValue);
+  removePossible(rowNo,colNo,squareValue);
+  reCheck(rowNo,colNo);
+  puzzleClues[rowNo][colNo] = squareValue;
+  possibles[rowNo][colNo] = [];
+  emptySquares --;
 }
 
-function getPossibles() {
-  //Adds all possibles into each array if there is not already a clue
-  for (var i = 0; i < 9; i++) {
-    for (var j = 0; j < 9; j ++) {
-      if (puzzleClues[i][j] === 0) {
-        for (var k = 0; k < 9; k ++) {
-          possibles[i][j][k] = k + 1;
-        }
-      }
-    }
-  }
-
-  //Removes possibles based on each clue
-  for (var i = 0; i < 9; i++) {
-    for (var j = 0; j < 9; j++) {
-      if (puzzleClues[i][j] > 0) {
-        removePossible(i,j,puzzleClues[i][j]);
-      }
-    }
-  }
+//this function updates the alreadyContains array
+function updateContainsArray(rowNo,colNo,squareValue) {
+  alreadyContains[0][rowNo].push(squareValue);
+  alreadyContains[1][colNo].push(squareValue);
+  alreadyContains[2][(rowNo - rowNo % 3) + (colNo - colNo % 3) / 3].push(squareValue);
 }
 
-
+//this function removes all possibles when a solution is found
 function removePossible(rowNo, colNo, squareValue) {
   removePossibleFromRow(rowNo,colNo, squareValue);
   removePossibleFromCol(rowNo,colNo,squareValue);
   removePossibleFromSector(rowNo,colNo,squareValue);
 }
 
+//this function removes the possible from a particular row
 function removePossibleFromRow(rowNo, colNo, squareValue) {
   for (var i = 0; i < 9; i++) {
     if (possibles[rowNo][i].indexOf(squareValue) !== -1) {
@@ -274,6 +310,7 @@ function removePossibleFromRow(rowNo, colNo, squareValue) {
   }
 }
 
+//this function removes the possible from a particular column
 function removePossibleFromCol(rowNo, colNo, squareValue) {
   for (var i = 0; i < 9; i++) {
     if (possibles[i][colNo].indexOf(squareValue) !== -1) {
@@ -281,6 +318,8 @@ function removePossibleFromCol(rowNo, colNo, squareValue) {
     }
   }
 }
+
+//this function removes the possible from a particular sector
 function removePossibleFromSector(rowNo, colNo, squareValue) {
   var rowCorner = rowNo - rowNo % 3;
   var colCorner = colNo - colNo % 3;
@@ -293,20 +332,11 @@ function removePossibleFromSector(rowNo, colNo, squareValue) {
   }
 }
 
-//updates clue array and board
-function setValue(rowNo, colNo, squareValue) {
-  document.getElementsByClassName("row-" + rowNo + " col-" + colNo)[0].value = squareValue;
-  updateContainsArray(rowNo,colNo,squareValue);
-  puzzleClues[rowNo][colNo] = squareValue;
-  possibles[rowNo][colNo] = [];
-}
-
 //updates the array of lines to check
 function reCheck(rowNo,colNo) {
-  toCheck[0][rowNo] = true;
-  toCheck[1][colNo] = true;
-  toCheck[2][(rowNo - rowNo % 3) + (colNo - colNo % 3) / 3] = true;
-  goThroughAgain = true;
+  toCheck.push([0,rowNo]);
+  toCheck.push([0,colNo]);
+  toCheck.push([2,(rowNo - rowNo % 3) + (colNo - colNo % 3) / 3]);
 }
 
 
@@ -314,23 +344,20 @@ function reCheck(rowNo,colNo) {
 function checkCell(rowNo,colNo) {
   if (possibles[rowNo][colNo].length === 1) {
     var squareValue = possibles[rowNo][colNo][0]
-    console.log("zero " + rowNo + "," + colNo + "," + squareValue)
+    console.log("Cell: " + rowNo+","+colNo+","+squareValue);
     setValue(rowNo,colNo,squareValue);
-    removePossible(rowNo,colNo,squareValue)
-    reCheck(rowNo,colNo);
     return true;
   }
-  else {
-    return false;
-  }
+  return false;
 }
 
 function checkRows() {
   var result = false;
-  for (var i = 0; i < 9; i++) {
+  for (var i = 0; i < toCheck[0].length; i++) {
     if (checkRow(i)) {
       result = true;
     }
+    toCheck[0][i]
   }
   return result;
 }
@@ -368,10 +395,8 @@ function checkRow(rowNo) {
         }
       }
       if (counter === 1) {
-        console.log("one " + rowNo+","+cellId+","+i);
+        console.log("Row: " + rowNo+","+cellId+","+i);
         setValue(rowNo,cellId,i);
-        removePossible(rowNo,cellId,i);
-        reCheck(rowNo,cellId);
         result = true;
       }
     }
@@ -393,10 +418,8 @@ function checkCol(colNo) {
         }
       }
       if (counter === 1) {
-        console.log("two " + cellId+","+colNo+","+i);
+        console.log("Column: " + cellId+","+colNo+","+i);
         setValue(cellId,colNo,i);
-        removePossible(cellId,colNo,i);
-        reCheck(cellId,colNo);
         result = true;
       }
     }
@@ -424,10 +447,8 @@ function checkSector(sectorNo) {
         }
       }
       if (counter === 1) {
-        console.log("three " + cellRow+","+cellCol+","+i);
+        console.log("Sector: " + cellRow+","+cellCol+","+i);
         setValue(cellRow,cellCol,i);
-        removePossible(cellRow,cellCol,i);
-        reCheck(cellRow,cellCol);
         result = true;
       }
     }
@@ -436,7 +457,15 @@ function checkSector(sectorNo) {
 }
 
 function lastResort() {
+  var searchingType = 0;
+  var searchingValue = 0;
   //for each row, column and then sector
+  for (var i = 0; i < 3; i++) {
+    for (var j = 0; j < 9; j++) {
+
+    }
+  }
+
 
     //gets a list of numbers that are still to appear
 
@@ -451,4 +480,5 @@ function lastResort() {
         //removes all extra numbers from those cells
 
         //function returns and the usual seach functions are continued
+        return false;
 }
