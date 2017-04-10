@@ -10,8 +10,8 @@ var possibles = []
 var toCheck = [];
 //a variable which stores whether the current loop needs to be repeated
 var emptySquares = 81;
-//an array which stores the values that are already in each row, column or sector [0 = row, 1 = column, 2 = sector][row, column or sector number][array of values]
-var alreadyContains = [];
+//an array which stores the values that are not yet in each row, column or sector [0 = row, 1 = column, 2 = sector][row, column or sector number][array of values]
+var doesntContain = [];
 
 
 //this script is run when the page loads
@@ -37,15 +37,17 @@ function setUpPuzzle() {
   document.getElementsByClassName("solvebutton")[0].addEventListener('click',solvePuzzle);
   //more array setup stuff
   for (var i = 0; i < 3; i ++) {
-    toCheck[i] = [];
-    alreadyContains[i] = [];
+    doesntContain[i] = [];
     for (var j = 0; j < 9; j ++) {
-      toCheck.push([i][j]);
-      alreadyContains[i][j] = [];
+      toCheck.push([i,j]);
+      doesntContain[i][j] = [];
+      for (var k = 0; k < 9; k ++) {
+        doesntContain[i][j].push(k+1);
+      }
     }
   }
   //loads an example sudoku
-  getSudoku(3);
+  //getSudoku(3);
 }
 
 //this function just loads an example sudoku (used for testing)
@@ -153,7 +155,7 @@ function getPuzzle() {
         node.classList.remove("error");
         puzzleClues[i][j] = Number(node.value);
         if (node.value > 0) {
-          updateContainsArray(i,j,node.value);
+          updateContainsArray(i,j,Number(node.value));
           emptySquares --;
         }
       }
@@ -224,21 +226,22 @@ function searchCells() {
 function searchRowsEtc() {
   var checking;
   var result = false;
-  for (var i = 0; i < toCheck.length; i++) {
+  for (var i = 0; i < toCheck.length; i) {
+    console.log(toCheck[0][0] + "," + toCheck[0][1])
     checking = toCheck.shift();
-    switch (toCheck[0]) {
+    switch (checking[0]) {
       case 0:
-        if (checkRows()) {
+        if (checkRow(checking[1])) {
           result = true;
         }
         break;
       case 1:
-        if (checkCols()) {
+        if (checkCol(checking[1])) {
           result = true;
         }
         break;
       case 2:
-        if (checkSectors()) {
+        if (checkSector(checking[1])) {
           result = true;
         }
         break;
@@ -287,11 +290,11 @@ function setValue(rowNo, colNo, squareValue) {
   emptySquares --;
 }
 
-//this function updates the alreadyContains array
+//this function updates the doesntContain array
 function updateContainsArray(rowNo,colNo,squareValue) {
-  alreadyContains[0][rowNo].push(squareValue);
-  alreadyContains[1][colNo].push(squareValue);
-  alreadyContains[2][(rowNo - rowNo % 3) + (colNo - colNo % 3) / 3].push(squareValue);
+  doesntContain[0][rowNo].splice(doesntContain[0][rowNo].indexOf(squareValue),1);
+  doesntContain[1][colNo].splice(doesntContain[1][colNo].indexOf(squareValue),1)
+  doesntContain[2][(rowNo - rowNo % 3) + (colNo - colNo % 3) / 3].splice(doesntContain[2][(rowNo - rowNo % 3) + (colNo - colNo % 3) / 3].indexOf(squareValue),1)
 }
 
 //this function removes all possibles when a solution is found
@@ -335,7 +338,7 @@ function removePossibleFromSector(rowNo, colNo, squareValue) {
 //updates the array of lines to check
 function reCheck(rowNo,colNo) {
   toCheck.push([0,rowNo]);
-  toCheck.push([0,colNo]);
+  toCheck.push([1,colNo]);
   toCheck.push([2,(rowNo - rowNo % 3) + (colNo - colNo % 3) / 3]);
 }
 
@@ -357,7 +360,6 @@ function checkRows() {
     if (checkRow(i)) {
       result = true;
     }
-    toCheck[0][i]
   }
   return result;
 }
@@ -386,7 +388,7 @@ function checkRow(rowNo) {
   var counter;
   var cellId;
   for (var i = 0; i < 9; i++) {
-    if (alreadyContains[0][rowNo].indexOf(i) === -1) {
+    if (doesntContain[0][rowNo].indexOf(i) !== -1) {
       counter = 0;
       for (var j = 0; j < 9; j++) {
         if (possibles[rowNo][j].indexOf(i) !== -1) {
@@ -409,7 +411,7 @@ function checkCol(colNo) {
   var counter;
   var cellId;
   for (var i = 0; i < 9; i++) {
-    if (alreadyContains[1][colNo].indexOf(i) === -1) {
+    if (doesntContain[1][colNo].indexOf(i) !== -1) {
       counter = 0;
       for (var j = 0; j < 9; j++) {
         if (possibles[j][colNo].indexOf(i) !== -1) {
@@ -435,7 +437,7 @@ function checkSector(sectorNo) {
   var cellRow;
   var cellCol;
   for (var i = 0; i < 9; i++) {
-    if (alreadyContains[2][sectorNo].indexOf(i) === -1) {
+    if (doesntContain[2][sectorNo].indexOf(i) !== -1) {
       counter = 0;
       for (var j = 0; j < 3; j ++) {
         for (var k = 0; k < 3; k++) {
@@ -457,28 +459,126 @@ function checkSector(sectorNo) {
 }
 
 function lastResort() {
-  var searchingType = 0;
-  var searchingValue = 0;
+  //this variable keeps track of the number of values currently looking for
+  var numValues = 2;
+  //this variable contains an array of the values currently looking for
+  var theseValues = [];
+  //this variable is temporarily used to grab the values from the doesntContain array
+  var theseValues2 = [];
+  //this variable contains a list of all the cells that require those values
+  var theseCells = [];
+  //is used to count which combination of values we are currently checking
+  var countArray = [];
+  var countLevel = 0;
+  //this array is used to grab the empty cells in the row
+  var empties = [];
   //for each row, column and then sector
-  for (var i = 0; i < 3; i++) {
-    for (var j = 0; j < 9; j++) {
+  for (var searchingType = 0; searchingType < 3; searchingType++) {
+    for (var searchingValue = 0; searchingValue < 9; searchingValue++) {
+      //gets the empy cells
+      empties = getEmpties(searchingType,searchingValue);
 
+      //need to make sure I reset the variables
+
+      //gets a list of numbers that are still to appear
+      //for each number from 2 to (1 - number of empty cells)
+      numValues = 2;
+      while (numValues < doesntContain[searchingType][searchingValue].length) {
+        theseValues2 = doesntContain[searchingType][searchingValue];
+        //picks that many different numbers
+        countArray = [];
+        theseValues = [];
+
+        for (var i = 0; i < numValues; i++) {
+          countArray[i] = i;
+        }
+
+        while (countArray[0] <= doesntContain[searchingType][searchingValue].length - numValues) {
+          //gets the cells that the chosen values (in the countArray)
+          theseCells = [];
+          for (var i = 0; i < numValues; i++) {
+            theseValues[i] = theseValues2[countArray[i]];
+          }
+
+          for (var i = 0; i < theseValues.length; i++) {
+            for (var j = 0; j < empties.length; j++) {
+              //gets a list of all cells that still have the possibility of being those numbers
+              if (possibles[empties[j][0]][empties[j][1]].indexOf(theseValues[i]) != -1) {
+                if (theseCells.indexOf(j) === -1) {
+                  theseCells.push(j);
+                }
+              }
+            }
+          }
+
+          //if the number of cells those numbers could appear in is x then
+          if (theseCells.length === numValues) {
+            var doneYet = false;
+            //removes all extra numbers from those cells
+            for (var i = 0; i < theseCells.length; i++) {
+              for (var j = 0; j < possibles[empties[theseCells[i]][0]][empties[theseCells[i]][1]].length; j++) {
+                var temp1 = possibles[empties[theseCells[i]][0]][empties[theseCells[i]][1]][j];
+                var temp = theseValues.indexOf(possibles[empties[theseCells[i]][0]][empties[theseCells[i]][1]][j]);
+                if (theseValues.indexOf(possibles[empties[theseCells[i]][0]][empties[theseCells[i]][1]][j]) === -1) {
+                  console.log("splicing " + possibles[empties[theseCells[i]][0]][empties[theseCells[i]][1]][j] + " from " + empties[theseCells[i]][0] + "," + empties[theseCells[i]][1]);
+                  possibles[empties[theseCells[i]][0]][empties[theseCells[i]][1]].splice(j,1);
+                  j --;
+                  doneYet = true;
+                  reCheck(empties[theseCells[i]][0],empties[theseCells[i]][1]);
+                }
+              }
+            }
+            //function returns and the usual seach functions are continued
+            if (doneYet === true) {
+              return true;
+            }
+          }
+
+          //gets the next set of numbers
+          if (countArray[countArray.length-1] === doesntContain[searchingType][searchingValue].length - 1) {
+            countLevel = countArray.length-2;
+            while (countArray[countLevel] === countArray[countLevel+1]-1) {
+              countLevel --;
+            }
+            countArray[countLevel] ++;
+            while (countLevel < countArray.length - 1) {
+              countLevel ++;
+              countArray[countLevel] = countArray[countLevel-1] + 1;
+            }
+          }
+          else {
+            countArray[countArray.length-1] ++;
+          }
+        }
+        numValues ++;
+      }
     }
   }
 
+}
 
-    //gets a list of numbers that are still to appear
-
-    //for each number from 2 to 1 - number of empty cells
-
-      //picks that many different numbers
-
-      //gets a list of all cells that still have the possibility of being those numbers
-
-      //if the number of cells those numbers could appear in is x then
-
-        //removes all extra numbers from those cells
-
-        //function returns and the usual seach functions are continued
-        return false;
+function getEmpties(searchingType,searchingValue) {
+  var result = [];
+  var cellRow;
+  var cellCol;
+  for (var i = 0; i < 9; i ++) {
+    switch (searchingType) {
+      case 0:
+        cellRow = searchingValue;
+        cellCol = i;
+        break;
+      case 1:
+        cellRow = i;
+        cellCol = searchingValue;
+        break;
+      case 2:
+        cellRow = searchingValue - searchingValue % 3 + (i - i % 3) / 3;
+        cellCol = (searchingValue % 3) * 3 + i % 3;
+        break;
+    }
+    if (puzzleClues[cellRow][cellCol] === 0) {
+      result.push([cellRow,cellCol]);
+    }
+  }
+  return result;
 }
